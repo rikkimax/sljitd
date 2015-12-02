@@ -224,7 +224,7 @@ static if (SLJIT_EXECUTABLE_ALLOCATOR || SLJIT_UTIL_GLOBAL_LOCK) {
                         return null;
                     }
                 }
-                base.ptr = mmap(NULL, max_limit, PROT_READ | PROT_WRITE, MAP_PRIVATE, dev_zero, 0);
+                base.ptr = mmap(null, max_limit, PROT_READ | PROT_WRITE, MAP_PRIVATE, dev_zero, 0);
             
                 if (base.ptr == MAP_FAILED) {
                     SLJIT_FREE(stack);

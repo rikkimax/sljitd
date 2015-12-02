@@ -104,11 +104,11 @@ version(Windows) {
         
         if (dev_zero < 0) {
             if (open_dev_zero())
-                return NULL;
+                return null;
         }
         retval = mmap(null, size, PROT_READ | PROT_WRITE | PROT_EXEC, MAP_PRIVATE, dev_zero, 0);
         
-        return (retval != MAP_FAILED) ? retval : NULL;
+        return (retval != MAP_FAILED) ? retval : null;
     }
     
     void free_chunk(void* chunk, sljit_uw size)
