@@ -601,7 +601,7 @@ bool ADDRESSING_DEPENDS_ON(int exp, int reg) {
 }
 
 static if (SLJIT_ARGUMENT_CHECKS) {
-    enum FUNCTION_CHECKS_OP = q{
+    enum FUNCTION_CHECK_OP = q{
         mixin(CHECK_ARGUMENT("!GET_FLAGS(op) || !(op & SLJIT_FLAGS)"));
         switch(GET_OPCODE(op)) {
             case SLJIT_NOT:
@@ -626,7 +626,7 @@ static if (SLJIT_ARGUMENT_CHECKS) {
             case SLJIT_SUB:
                 break;
             case SLJIT_ADDC:
-            case SLJIB_SUBC:
+            case SLJIT_SUBC:
                 mixin(CHECK_ARGUMENT("!(op & (SLJIT_SET_E | SLJIT_SET_U | SLJIT_SET_S | SLJIT_SET_O))"));
                 break;
             case SLJIT_BREAKPOINT:
@@ -663,19 +663,19 @@ static if (SLJIT_ARGUMENT_CHECKS) {
     string FUNCTION_CHECK_IS_REG(string r) pure {
         return `
 (` ~ r ~ ` >= SLJIT_R0 && ` ~ r ~ ` < (SLJIT_R0 + compiler.scratches)) ||
-(` ~ r ~ ` > (SLJIT_S0 - compiler.saveds) && ` ~ r ~ ` <= SLJIT_S0);`;
+(` ~ r ~ ` > (SLJIT_S0 - compiler.saveds) && ` ~ r ~ ` <= SLJIT_S0)`;
     }
 
     string FUNCTION_CHECK_IS_REG_OR_UNUSED(string r) pure {
         return `
 ` ~ r ~ ` == SLJIT_UNUSED ||
 (` ~ r ~ ` >= SLJIT_R0 && ` ~ r ~ ` < (SLJIT_R0 + compiler.scratches)) ||
-(` ~ r ~ ` > (SLJIT_S0 - compiler.saveds) && ` ~ r ~ ` <= SLJIT_S0);`;
+(` ~ r ~ ` > (SLJIT_S0 - compiler.saveds) && ` ~ r ~ ` <= SLJIT_S0)`;
     }
 
     static if (SLJIT_CONFIG_X86_32) {
         string CHECK_NOT_VIRTUAL_REGISTER(string p) pure {
-            return `CHECK_ARGUMENT("` ~ p ~ ` < SLJIT_R3 || ` ~ p ~ ` > SLJIT_R6")`;
+            return CHECK_ARGUMENT(p ~ ` < SLJIT_R3 || ` ~ p ~ ` > SLJIT_R6`);
         }
     } else {
         string CHECK_NOT_VIRTUAL_REGISTER(string p) pure {
@@ -693,12 +693,12 @@ if (` ~ FUNCTION_CHECK_IS_REG(p) ~ `) {
     ` ~ CHECK_ARGUMENT(i ~ " >= 0 && " ~ i ~ " < compiler.logical_local_size") ~ `
 } else {
     ` ~ CHECK_ARGUMENT(p ~ " & SLJIT_MEM") ~ `
-    mixin(CHECK_ARGUMENT(FUNCTION_CHECK_IS_REG_OR_UNUSED(` ~ p ~ ` & REG_MASK)));
+    mixin(CHECK_ARGUMENT(FUNCTION_CHECK_IS_REG_OR_UNUSED("` ~ p ~ ` & REG_MASK")));
     ` ~ CHECK_NOT_VIRTUAL_REGISTER(p ~ " & REG_MASK") ~ `
     if (` ~ p ~ ` & OFFS_REG_MASK) {
         ` ~ CHECK_ARGUMENT("(" ~ p ~ " & REG_MASK) != SLJIT_UNUSED") ~ `
-        mixin(CHECK_ARGUMENT(FUNCTION_CHECK_IS_REG(OFFS_REG(` ~ p ~ `))));
-        mixin(CHECK_NOT_VIRTUAL_REGISTER(OFFS_REG(` ~ p ~ `)));
+        mixin(CHECK_ARGUMENT(FUNCTION_CHECK_IS_REG("OFFS_REG(` ~ p ~ `)")));
+        mixin(CHECK_NOT_VIRTUAL_REGISTER("OFFS_REG(` ~ p ~ `)"));
         ` ~ CHECK_ARGUMENT("!(" ~ i ~ " & ~0x3)") ~ `
     }
     ` ~ CHECK_ARGUMENT("!(" ~ p ~ " & ~(SLJIT_MEM | SLJIT_IMM | REG_MASK | OFFS_REG_MASK))") ~ `
@@ -714,12 +714,12 @@ if (` ~ FUNCTION_CHECK_IS_REG_OR_UNUSED(p) ~ `) {
     ` ~ CHECK_ARGUMENT(i ~ " >= 0 && " ~ i ~ " < compiler.logical_local_size") ~ `
 } else {
     ` ~ CHECK_ARGUMENT(p ~ " & SLJIT_MEM") ~ `
-    mixin(CHECK_ARGUMENT(FUNCTION_CHECK_IS_REG_OR_UNUSED(` ~ p ~ ` & REG_MASK)));
+    mixin(CHECK_ARGUMENT(FUNCTION_CHECK_IS_REG_OR_UNUSED("` ~ p ~ ` & REG_MASK")));
     ` ~ CHECK_NOT_VIRTUAL_REGISTER(p ~ " & REG_MASK") ~ `
     if (` ~ p ~ ` & OFFS_REG_MASK) {
         ` ~ CHECK_ARGUMENT("(" ~ p ~ " & REG_MASK) != SLJIT_UNUSED") ~ `
-        mixin(CHECK_ARGUMENT(FUNCTION_CHECK_IS_REG(OFFS_REG(` ~ p ~ `))));
-        mixin(CHECK_NOT_VIRTUAL_REGISTER(OFFS_REG(` ~ p ~ `)));
+        mixin(CHECK_ARGUMENT(FUNCTION_CHECK_IS_REG("OFFS_REG(` ~ p ~ `)")));
+        mixin(CHECK_NOT_VIRTUAL_REGISTER("OFFS_REG(` ~ p ~ `)"));
         ` ~ CHECK_ARGUMENT("!(" ~ i ~ " & ~0x3)") ~ `
     }
     ` ~ CHECK_ARGUMENT("!(" ~ p ~ " & ~(SLJIT_MEM | SLJIT_IMM | REG_MASK | OFFS_REG_MASK))") ~ `
@@ -730,18 +730,18 @@ if (` ~ FUNCTION_CHECK_IS_REG_OR_UNUSED(p) ~ `) {
         return `
 ` ~ CHECK_ARGUMENT("compiler.scratches != -1 && compiler.saveds != -1") ~ `
 
-if ((` ~ p ~ ` >= SLJIT_FR0 && p < (SLJIT_FR0 + compiler.fscratches)) || (p > (SLJIT_FS0 - compiler.fsaveds) && p <= SLJIT_FS0)) {
+if ((` ~ p ~ ` >= SLJIT_FR0 && ` ~ p ~ ` < (SLJIT_FR0 + compiler.fscratches)) || (` ~ p ~ ` > (SLJIT_FS0 - compiler.fsaveds) && ` ~ p ~ ` <= SLJIT_FS0)) {
     ` ~ CHECK_ARGUMENT(i ~ " == 0") ~ `
 } else if (` ~ p ~ ` == SLJIT_MEM1(SLJIT_SP)) {
     ` ~ CHECK_ARGUMENT(i ~ " >= 0 && " ~ i ~ " < compiler.logical_local_size") ~ `
 } else {
     ` ~ CHECK_ARGUMENT(p ~ " & SLJIT_MEM") ~ `
-    mixin(CHECK_ARGUMENT(FUNCTION_CHECK_IS_REG_OR_UNUSED(` ~ p ~ ` & REG_MASK)));
+    mixin(CHECK_ARGUMENT(FUNCTION_CHECK_IS_REG_OR_UNUSED("` ~ p ~ ` & REG_MASK")));
     ` ~ CHECK_NOT_VIRTUAL_REGISTER(p ~ " & REG_MASK") ~ `
     if (` ~ p ~ ` & OFFS_REG_MASK) {
         ` ~ CHECK_ARGUMENT("(" ~ p ~ " & REG_MASK) != SLJIT_UNUSED") ~ `
-        mixin(CHECK_ARGUMENT(FUNCTION_CHECK_IS_REG(OFFS_REG(` ~ p ~ `))));
-        mixin(CHECK_NOT_VIRTUAL_REGISTER(OFFS_REG(` ~ p ~ `)));
+        mixin(CHECK_ARGUMENT(FUNCTION_CHECK_IS_REG("OFFS_REG(` ~ p ~ `)")));
+        mixin(CHECK_NOT_VIRTUAL_REGISTER("OFFS_REG(` ~ p ~ `)"));
         ` ~ CHECK_ARGUMENT("(" ~ p ~ " & OFFS_REG_MASK) != TO_OFFS_REG(SLJIT_SP) && !(i & ~0x3)") ~ `
     }
     ` ~ CHECK_ARGUMENT("!(" ~ p ~ " & ~(SLJIT_MEM | SLJIT_IMM | REG_MASK | OFFS_REG_MASK))") ~ `
@@ -838,57 +838,57 @@ void sljit_verbose_fparam(sljit_compiler* compiler, int p, int i) {
             fprintf(compiler.verbose, cast(char*)"fs%d", SLJIT_NUMBER_OF_FLOAT_REGISTERS - p);
         }
     }
-
-    static const(char*)[] op0_names = [
-        cast(char*)"breakpoint", cast(char*)"nop",
-        cast(char*)"lumul", cast(char*)"lsmul", cast(char*)"ludiv", cast(char*)"lsdiv",
-    ];
-    
-    static const(char*)[] op1_names = [
-        cast(char*)"mov", cast(char*)"mov_ub", cast(char*)"mov_sb", cast(char*)"mov_uh",
-        cast(char*)"mov_sh", cast(char*)"mov_ui", cast(char*)"mov_si", cast(char*)"mov_p",
-        cast(char*)"movu", cast(char*)"movu_ub", cast(char*)"movu_sb", cast(char*)"movu_uh",
-        cast(char*)"movu_sh", cast(char*)"movu_ui", cast(char*)"movu_si", cast(char*)"movu_p",
-        cast(char*)"not", cast(char*)"neg", cast(char*)"clz",
-    ];
-    
-    static const(char*)[] op2_names = [
-        cast(char*)"add", cast(char*)"addc", cast(char*)"sub", cast(char*)"subc",
-        cast(char*)"mul", cast(char*)"and", cast(char*)"or", cast(char*)"xor",
-        cast(char*)"shl", cast(char*)"lshr", cast(char*)"ashr",
-    ];
-    
-    static const(char*)[] fop1_names = [
-        cast(char*)"mov", cast(char*)"conv", cast(char*)"conv", cast(char*)"conv",
-        cast(char*)"conv", cast(char*)"conv", cast(char*)"cmp", cast(char*)"neg",
-        cast(char*)"abs",
-    ];
-    
-    static const(char*)[] fop2_names = [
-        cast(char*)"add", cast(char*)"sub", cast(char*)"mul", cast(char*)"div"
-    ];
-
-    string JUMP_PREFIX(int type) pure {
-        return (type & 0xff) <= SLJIT_MUL_NOT_OVERFLOW ? ((type & SLJIT_INT_OP) ? "i_" : "")
-            : (type  & 0xff) <= SLJIT_D_ORDERED ? ((type & SLJIT_SINGLE_OP) ? "s_" : "d_") : "";
-    }
-
-    static char*[] jump_names = [
-        cast(char*)"equal", cast(char*)"not_equal",
-        cast(char*)"less", cast(char*)"greater_equal",
-        cast(char*)"greater", cast(char*)"less_equal",
-        cast(char*)"sig_less", cast(char*)"sig_greater_equal",
-        cast(char*)"sig_greater", cast(char*)"sig_less_equal",
-        cast(char*)"overflow", cast(char*)"not_overflow",
-        cast(char*)"mul_overflow", cast(char*)"mul_not_overflow",
-        cast(char*)"equal", cast(char*)"not_equal",
-        cast(char*)"less", cast(char*)"greater_equal",
-        cast(char*)"greater", cast(char*)"less_equal",
-        cast(char*)"unordered", cast(char*)"ordered",
-        cast(char*)"jump", cast(char*)"fast_call",
-        cast(char*)"call0", cast(char*)"call1", cast(char*)"call2", cast(char*)"call3"
-    ];
 }
+
+static const(char*)[] op0_names = [
+    cast(char*)"breakpoint", cast(char*)"nop",
+    cast(char*)"lumul", cast(char*)"lsmul", cast(char*)"ludiv", cast(char*)"lsdiv",
+];
+
+static const(char*)[] op1_names = [
+    cast(char*)"mov", cast(char*)"mov_ub", cast(char*)"mov_sb", cast(char*)"mov_uh",
+    cast(char*)"mov_sh", cast(char*)"mov_ui", cast(char*)"mov_si", cast(char*)"mov_p",
+    cast(char*)"movu", cast(char*)"movu_ub", cast(char*)"movu_sb", cast(char*)"movu_uh",
+    cast(char*)"movu_sh", cast(char*)"movu_ui", cast(char*)"movu_si", cast(char*)"movu_p",
+    cast(char*)"not", cast(char*)"neg", cast(char*)"clz",
+];
+
+static const(char*)[] op2_names = [
+    cast(char*)"add", cast(char*)"addc", cast(char*)"sub", cast(char*)"subc",
+    cast(char*)"mul", cast(char*)"and", cast(char*)"or", cast(char*)"xor",
+    cast(char*)"shl", cast(char*)"lshr", cast(char*)"ashr",
+];
+
+static const(char*)[] fop1_names = [
+    cast(char*)"mov", cast(char*)"conv", cast(char*)"conv", cast(char*)"conv",
+    cast(char*)"conv", cast(char*)"conv", cast(char*)"cmp", cast(char*)"neg",
+    cast(char*)"abs",
+];
+
+static const(char*)[] fop2_names = [
+    cast(char*)"add", cast(char*)"sub", cast(char*)"mul", cast(char*)"div"
+];
+
+string JUMP_PREFIX(int type) pure {
+    return (type & 0xff) <= SLJIT_MUL_NOT_OVERFLOW ? ((type & SLJIT_INT_OP) ? "i_" : "")
+        : (type  & 0xff) <= SLJIT_D_ORDERED ? ((type & SLJIT_SINGLE_OP) ? "s_" : "d_") : "";
+}
+
+static char*[] jump_names = [
+    cast(char*)"equal", cast(char*)"not_equal",
+    cast(char*)"less", cast(char*)"greater_equal",
+    cast(char*)"greater", cast(char*)"less_equal",
+    cast(char*)"sig_less", cast(char*)"sig_greater_equal",
+    cast(char*)"sig_greater", cast(char*)"sig_less_equal",
+    cast(char*)"overflow", cast(char*)"not_overflow",
+    cast(char*)"mul_overflow", cast(char*)"mul_not_overflow",
+    cast(char*)"equal", cast(char*)"not_equal",
+    cast(char*)"less", cast(char*)"greater_equal",
+    cast(char*)"greater", cast(char*)"less_equal",
+    cast(char*)"unordered", cast(char*)"ordered",
+    cast(char*)"jump", cast(char*)"fast_call",
+    cast(char*)"call0", cast(char*)"call1", cast(char*)"call2", cast(char*)"call3"
+];
 
 /* --------------------------------------------------------------------- */
 /*  Arch dependent                                                       */
@@ -915,9 +915,655 @@ static if (SLJIT_ARGUMENT_CHECKS || SLJIT_VERBOSE) {
     CHECK_RETURN_TYPE check_sljit_emit_enter(sljit_compiler* compiler,
         sljit_si options, sljit_si args, sljit_si scratches, sljit_si saveds,
         sljit_si fscratches, sljit_si fsaveds, sljit_si local_size) {
+        import core.stdc.stdio : fprintf;
 
-        // TODO
+        static if (SLJIT_ARGUMENT_CHECKS) {
+            mixin(CHECK_ARGUMENT("!(options & ~SLJIT_DOUBLE_ALIGNMENT)"));
+            mixin(CHECK_ARGUMENT("(args >= 0 && args <= 3)"));
+            mixin(CHECK_ARGUMENT("(scratches >= 0 && scratches <= SLJIT_NUMBER_OF_REGISTERS)"));
+            mixin(CHECK_ARGUMENT("(saveds >= 0 && saveds <= SLJIT_NUMBER_OF_REGISTERS)"));
+            mixin(CHECK_ARGUMENT("(scratches + saveds <= SLJIT_NUMBER_OF_REGISTERS)"));
+            mixin(CHECK_ARGUMENT("(args <= saveds)"));
+            mixin(CHECK_ARGUMENT("(fscratches >= 0 && fscratches <= SLJIT_NUMBER_OF_FLOAT_REGISTERS)"));
+            mixin(CHECK_ARGUMENT("(fsaveds >= 0 && fsaveds <= SLJIT_NUMBER_OF_FLOAT_REGISTERS)"));
+            mixin(CHECK_ARGUMENT("(fscratches + fsaveds <= SLJIT_NUMBER_OF_FLOAT_REGISTERS)"));
+            mixin(CHECK_ARGUMENT("(local_size >= 0 && local_size <= SLJIT_MAX_LOCAL_SIZE)"));
+        }
+
+        static if (SLJIT_VERBOSE) {
+            if (SLJIT_UNLIKELY(!!compiler.verbose)) {
+                fprintf(compiler.verbose, cast(char*)"  enter options:none args:%d scratches:%d saveds:%d fscratches:%d fsaveds:%d local_size:%d\n",
+                    args, scratches, saveds, fscratches, fsaveds, local_size);
+            }
+        }
+
+        mixin(CHECK_RETURN_OK);
+    }
+
+    CHECK_RETURN_TYPE check_sljit_set_context(sljit_compiler* compiler,
+        sljit_si options, sljit_si args, sljit_si scratches, sljit_si saveds,
+        sljit_si fscratches, sljit_si fsaveds, sljit_si local_size) {
+        import core.stdc.stdio : fprintf;
+
+        if (SLJIT_UNLIKELY(compiler.skip_checks)) {
+            compiler.skip_checks = 0;
+            mixin(CHECK_RETURN_OK);
+        }
+
+        static if (SLJIT_ARGUMENT_CHECKS) {
+            mixin(CHECK_ARGUMENT("!(options & ~SLJIT_DOUBLE_ALIGNMENT)"));
+            mixin(CHECK_ARGUMENT("(args >= 0 && args <= 3)"));
+            mixin(CHECK_ARGUMENT("(scratches >= 0 && scratches <= SLJIT_NUMBER_OF_REGISTERS)"));
+            mixin(CHECK_ARGUMENT("(saveds >= 0 && saveds <= SLJIT_NUMBER_OF_REGISTERS)"));
+            mixin(CHECK_ARGUMENT("(scratches + saveds <= SLJIT_NUMBER_OF_REGISTERS)"));
+            mixin(CHECK_ARGUMENT("(args <= saveds)"));
+            mixin(CHECK_ARGUMENT("(fscratches >= 0 && fscratches <= SLJIT_NUMBER_OF_FLOAT_REGISTERS)"));
+            mixin(CHECK_ARGUMENT("(fsaveds >= 0 && fsaveds <= SLJIT_NUMBER_OF_FLOAT_REGISTERS)"));
+            mixin(CHECK_ARGUMENT("(fscratches + fsaveds <= SLJIT_NUMBER_OF_FLOAT_REGISTERS)"));
+            mixin(CHECK_ARGUMENT("(local_size >= 0 && local_size <= SLJIT_MAX_LOCAL_SIZE)"));
+        }
+
+        static if (SLJIT_VERBOSE) {
+            if (SLJIT_UNLIKELY(!!compiler.verbose)) {
+                fprintf(compiler.verbose, cast(char*)"  set_context options:none args:%d scratches:%d saveds:%d fscratches:%d fsaveds:%d local_size:%d\n",
+                    args, scratches, saveds, fscratches, fsaveds, local_size);
+            }
+        }
+
+        mixin(CHECK_RETURN_OK);
+    }
+
+    CHECK_RETURN_TYPE check_sljit_emit_return(sljit_compiler* compiler, sljit_si op, sljit_si src, sljit_sw srcw) {
+        import core.stdc.stdio : fprintf;
+        static if (SLJIT_ARGUMENT_CHECKS) {
+            mixin(CHECK_ARGUMENT("compiler.scratches >= 0"));
+            if (op != SLJIT_UNUSED) {
+                mixin(CHECK_ARGUMENT("op >= SLJIT_MOV && op <= SLJIT_MOV_P"));
+                mixin(FUNCTION_CHECK_SRC("src", "srcw"));
+            } else {
+                mixin(CHECK_ARGUMENT("src == 0 && srcw == 0"));
+            }
+        }
+
+        static if (SLJIT_VERBOSE) {
+            if (SLJIT_UNLIKELY(!!compiler.verbose)) {
+                if (op == SLJIT_UNUSED) {
+                    fprintf(compiler.verbose, cast(char*)"  return\n");
+                } else {
+                    fprintf(compiler.verbose, cast(char*)"  return.%s ", op1_names[op - SLJIT_OP1_BASE]);
+                    sljit_verbose_param(compiler, src, srcw);
+                    fprintf(compiler.verbose, cast(char*)"\n");
+                }
+            }
+        }
+
+        mixin(CHECK_RETURN_OK);
+    }
+
+    CHECK_RETURN_TYPE check_sljit_emit_fast_enter(sljit_compiler* compiler, sljit_si dst, sljit_sw dstw) {
+        import core.stdc.stdio : fprintf;
+        static if (SLJIT_ARGUMENT_CHECKS) {
+            mixin(FUNCTION_CHECK_DST("dst", "dstw"));
+        }
+
+        static if (SLJIT_VERBOSE) {
+            if (SLJIT_UNLIKELY(!!compiler.verbose)) {
+                fprintf(compiler.verbose, cast(char*)"  fast_enter ");
+                sljit_verbose_param(compiler, dst, dstw);
+                fprintf(compiler.verbose, cast(char*)"\n");
+            }
+        }
+
+        mixin(CHECK_RETURN_OK);
+    }
+
+    CHECK_RETURN_TYPE check_sljit_emit_fast_return(sljit_compiler *compiler, sljit_si src, sljit_sw srcw)
+    {
+        import core.stdc.stdio : fprintf;
+        static if (SLJIT_ARGUMENT_CHECKS) {
+            mixin(FUNCTION_CHECK_SRC("src", "srcw"));
+        }
+        static if (SLJIT_VERBOSE) {
+            if (SLJIT_UNLIKELY(!!compiler.verbose)) {
+                fprintf(compiler.verbose, cast(char*)"  fast_return ");
+                sljit_verbose_param(compiler, src, srcw);
+                fprintf(compiler.verbose, cast(char*)"\n");
+            }
+        }
+        mixin(CHECK_RETURN_OK);
+    }
+    
+    CHECK_RETURN_TYPE check_sljit_emit_op0(sljit_compiler *compiler, sljit_si op)
+    {
+        import core.stdc.stdio : fprintf;
+        static if(SLJIT_ARGUMENT_CHECKS) {
+            mixin(CHECK_ARGUMENT("(op >= SLJIT_BREAKPOINT && op <= SLJIT_LSMUL)
+                || ((op & ~SLJIT_INT_OP) >= SLJIT_LUDIV && (op & ~SLJIT_INT_OP) <= SLJIT_LSDIV)"));
+            mixin(CHECK_ARGUMENT("op < SLJIT_LUMUL || compiler.scratches >= 2"));
+        }
+        static if(SLJIT_VERBOSE) {
+            if (SLJIT_UNLIKELY(!!compiler.verbose))
+                fprintf(compiler.verbose, cast(char*)"  %s%s\n", !(op & SLJIT_INT_OP) ? cast(char*)"" : cast(char*)"i", op0_names[GET_OPCODE(op) - SLJIT_OP0_BASE]);
+        }
+        mixin(CHECK_RETURN_OK);
+    }
+
+    CHECK_RETURN_TYPE check_sljit_emit_op1(sljit_compiler* compiler, sljit_si op,
+        sljit_si dst, sljit_sw dstw,
+        sljit_si src, sljit_sw srcw)
+    {
+        import core.stdc.stdio : fprintf;
+
+        if (SLJIT_UNLIKELY(compiler.skip_checks)) {
+            compiler.skip_checks = 0;
+            mixin(CHECK_RETURN_OK);
+        }
+
+        static if (SLJIT_ARGUMENT_CHECKS) {
+            mixin(CHECK_ARGUMENT("GET_OPCODE(op) >= SLJIT_MOV && GET_OPCODE(op) <= SLJIT_CLZ"));
+            mixin(FUNCTION_CHECK_OP);
+            mixin(FUNCTION_CHECK_SRC("src", "srcw"));
+            mixin(FUNCTION_CHECK_DST("dst", "dstw"));
+            mixin(FUNCTION_CHECK_OP1);
+        }
+
+        static if (SLJIT_VERBOSE) {
+            if (SLJIT_UNLIKELY(!!compiler.verbose)) {
+                fprintf(compiler.verbose, cast(char*)"  %s%s%s%s%s%s%s%s ", !(op & SLJIT_INT_OP) ? cast(char*)"" : cast(char*)"i", op1_names[GET_OPCODE(op) - SLJIT_OP1_BASE],
+                    !(op & SLJIT_SET_E) ? cast(char*)"" : cast(char*)".e", !(op & SLJIT_SET_U) ? cast(char*)"" : cast(char*)".u", !(op & SLJIT_SET_S) ? cast(char*)"" : cast(char*)".s",
+                    !(op & SLJIT_SET_O) ? cast(char*)"" : cast(char*)".o", !(op & SLJIT_SET_C) ? cast(char*)"" : cast(char*)".c", !(op & SLJIT_KEEP_FLAGS) ? cast(char*)"" : cast(char*)".k");
+                sljit_verbose_param(compiler, dst, dstw);
+                fprintf(compiler.verbose, cast(char*)", ");
+                sljit_verbose_param(compiler, src, srcw);
+                fprintf(compiler.verbose, cast(char*)"\n");
+            }
+        }
+
+        mixin(CHECK_RETURN_OK);
+    }
+
+    CHECK_RETURN_TYPE check_sljit_emit_op2(sljit_compiler *compiler, sljit_si op,
+        sljit_si dst, sljit_sw dstw,
+        sljit_si src1, sljit_sw src1w,
+        sljit_si src2, sljit_sw src2w)
+    {
+        import core.stdc.stdio : fprintf;
+        if (SLJIT_UNLIKELY(compiler.skip_checks)) {
+            compiler.skip_checks = 0;
+            mixin(CHECK_RETURN_OK);
+        }
+        
+        static if(SLJIT_ARGUMENT_CHECKS) {
+            mixin(CHECK_ARGUMENT("GET_OPCODE(op) >= SLJIT_ADD && GET_OPCODE(op) <= SLJIT_ASHR"));
+            mixin(FUNCTION_CHECK_OP);
+            mixin(FUNCTION_CHECK_SRC("src1", "src1w"));
+            mixin(FUNCTION_CHECK_SRC("src2", "src2w"));
+            mixin(FUNCTION_CHECK_DST("dst", "dstw"));
+        }
+        static if (SLJIT_VERBOSE) {
+            if (SLJIT_UNLIKELY(!!compiler.verbose)) {
+                fprintf(compiler.verbose, cast(char*)"  %s%s%s%s%s%s%s%s ", !(op & SLJIT_INT_OP) ? cast(char*)"" : cast(char*)"i", op2_names[GET_OPCODE(op) - SLJIT_OP2_BASE],
+                    !(op & SLJIT_SET_E) ? cast(char*)"" : cast(char*)".e", !(op & SLJIT_SET_U) ? cast(char*)"" : cast(char*)".u", !(op & SLJIT_SET_S) ? cast(char*)"" : cast(char*)".s",
+                    !(op & SLJIT_SET_O) ? cast(char*)"" : cast(char*)".o", !(op & SLJIT_SET_C) ? cast(char*)"" : cast(char*)".c", !(op & SLJIT_KEEP_FLAGS) ? cast(char*)"" : cast(char*)".k");
+                sljit_verbose_param(compiler, dst, dstw);
+                fprintf(compiler.verbose, cast(char*)", ");
+                sljit_verbose_param(compiler, src1, src1w);
+                fprintf(compiler.verbose, cast(char*)", ");
+                sljit_verbose_param(compiler, src2, src2w);
+                fprintf(compiler.verbose, cast(char*)"\n");
+            }
+        }
+
+        mixin(CHECK_RETURN_OK);
+    }
+
+    CHECK_RETURN_TYPE check_sljit_get_register_index(sljit_si reg) {
+        static if (SLJIT_ARGUMENT_CHECKS) {
+            mixin(CHECK_ARGUMENT("reg > 0 && reg <= SLJIT_NUMBER_OF_REGISTERS"));
+        }
+
+        mixin(CHECK_RETURN_OK);
+    }
+
+    CHECK_RETURN_TYPE check_sljit_get_float_register_index(sljit_si reg) {
+        static if (SLJIT_ARGUMENT_CHECKS) {
+            mixin(CHECK_ARGUMENT("reg > 0 && reg <= SLJIT_NUMBER_OF_FLOAT_REGISTERS"));
+        }
+        
+        mixin(CHECK_RETURN_OK);
+    }
+
+    CHECK_RETURN_TYPE check_sljit_emit_op_custom(sljit_compiler* compiler, void* instruction, sljit_si size) {
+        import core.stdc.stdio : fprintf;
+        static if (SLJIT_VERBOSE) {
+            int i;
+        }
+
+        static if (SLJIT_ARGUMENT_CHECKS) {
+            mixin(CHECK_ARGUMENT("instruction"));
+
+            static if (SLJIT_CONFIG_X86) {
+                mixin(CHECK_ARGUMENT("size > 0 && size < 16"));
+            } else static if (SLJIT_CONFIG_ARM_THUMB2) {
+                mixin(CHECK_ARGUMENT("(size == 2 && ((cast(sljit_sw)instruction) & 0x1) == 0) || (size == 4 && ((cast(sljit_sw)instruction) & 0x3) == 0)"));
+            } else {
+                mixin(CHECK_ARGUMENT("size == 4 && ((cast(sljit_sw)instruction & 0x3) == 0)"));
+            }
+        }
+
+        static if (SLJIT_VERBOSE) {
+            if (SLJIT_UNLIKELY(!!compiler.verbose)) {
+                fprintf(compiler.verbose, cast(char*)"  op_custom");
+                for (i = 0; i < size; i++)
+                    fprintf(compiler.verbose, cast(char*)" 0x%x", (cast(sljit_ub*)instruction)[i]);
+                fprintf(compiler.verbose, cast(char*)"\n");
+            }
+        }
+
+        mixin(CHECK_RETURN_OK);
+    }
+
+    CHECK_RETURN_TYPE check_sljit_emit_fop1(sljit_compiler* compiler, sljit_si op, sljit_si dst, sljit_sw dstw,
+        sljit_si src, sljit_sw srcw)
+    {
+        import core.stdc.stdio : fprintf;
+        if (SLJIT_UNLIKELY(compiler.skip_checks)) {
+            compiler.skip_checks = 0;
+            mixin(CHECK_RETURN_OK);
+        }
+
+        static if (SLJIT_ARGUMENT_CHECKS) {
+            mixin(CHECK_ARGUMENT("sljit_is_fpu_available()"));
+            mixin(CHECK_ARGUMENT("GET_OPCODE(op) >= SLJIT_DMOV && GET_OPCODE(op) <= SLJIT_DABS"));
+            mixin(FUNCTION_CHECK_FOP);
+            mixin(FUNCTION_FCHECK("src", "srcw"));
+            mixin(FUNCTION_FCHECK("dst", "dstw"));
+        }
+
+        static if (SLJIT_VERBOSE) {
+            if (SLJIT_UNLIKELY(!!compiler.verbose)) {
+                if (GET_OPCODE(op) == SLJIT_CONVD_FROMS)
+                    fprintf(compiler.verbose, cast(char*)"  %s%s ", fop1_names[SLJIT_CONVD_FROMS - SLJIT_FOP1_BASE],
+                        (op & SLJIT_SINGLE_OP) ? cast(char*)"s.fromd" : cast(char*)"d.froms");
+                else
+                    fprintf(compiler.verbose, cast(char*)"  %s%s ", (op & SLJIT_SINGLE_OP) ? cast(char*)"s" : cast(char*)"d",
+                        fop1_names[GET_OPCODE(op) - SLJIT_FOP1_BASE]);
+                
+                sljit_verbose_fparam(compiler, dst, dstw);
+                fprintf(compiler.verbose, cast(char*)", ");
+                sljit_verbose_fparam(compiler, src, srcw);
+                fprintf(compiler.verbose, cast(char*)"\n");
+            }
+        }
+
+        mixin(CHECK_RETURN_OK);
+    }
+
+    CHECK_RETURN_TYPE check_sljit_emit_fop1_cmp(sljit_compiler* compiler, sljit_si op,
+        sljit_si src1, sljit_sw src1w,
+        sljit_si src2, sljit_sw src2w) {
+        import core.stdc.stdio : fprintf;
+
+        static if (SLJIT_ARGUMENT_CHECKS) {
+            mixin(CHECK_ARGUMENT("sljit_is_fpu_available()"));
+            mixin(CHECK_ARGUMENT("GET_OPCODE(op) == SLJIT_DCMP"));
+            mixin(FUNCTION_CHECK_FOP);
+            mixin(FUNCTION_FCHECK("src1", "src1w"));
+            mixin(FUNCTION_FCHECK("src2", "src2w"));
+        }
+
+        static if (SLJIT_VERBOSE) {
+            if (SLJIT_UNLIKELY(!!compiler.verbose)) {
+                fprintf(compiler.verbose, cast(char*)"  %s%s%s%s ", (op & SLJIT_SINGLE_OP) ? cast(char*)"s" : cast(char*)"d", fop1_names[SLJIT_DCMP - SLJIT_FOP1_BASE],
+                    (op & SLJIT_SET_E) ? cast(char*)".e" : cast(char*)"", (op & SLJIT_SET_S) ? cast(char*)".s" : cast(char*)"");
+                sljit_verbose_fparam(compiler, src1, src1w);
+                fprintf(compiler.verbose, cast(char*)", ");
+                sljit_verbose_fparam(compiler, src2, src2w);
+                fprintf(compiler.verbose, cast(char*)"\n");
+            }
+        }
+
+        mixin(CHECK_RETURN_OK);
+    }
+
+    CHECK_RETURN_TYPE check_sljit_emit_fop1_convw_fromd(sljit_compiler* compiler, sljit_si op,
+        sljit_si dst, sljit_sw dstw,
+        sljit_si src, sljit_sw srcw)
+    {
+        import core.stdc.stdio : fprintf;
+
+        if (SLJIT_UNLIKELY(compiler.skip_checks)) {
+            compiler.skip_checks = 0;
+            mixin(CHECK_RETURN_OK);
+        }
+
+        static if (SLJIT_ARGUMENT_CHECKS) {
+            mixin(CHECK_ARGUMENT("sljit_is_fpu_available()"));
+            mixin(CHECK_ARGUMENT("GET_OPCODE(op) >= SLJIT_CONVW_FROMD && GET_OPCODE(op) <= SLJIT_CONVI_FROMD"));
+            mixin(FUNCTION_CHECK_FOP);
+            mixin(FUNCTION_FCHECK("src", "srcw"));
+            mixin(FUNCTION_CHECK_DST("dst", "dstw"));
+        }
+
+        static if (SLJIT_VERBOSE) {
+            if (SLJIT_UNLIKELY(!!compiler.verbose)) {
+                fprintf(compiler.verbose, cast(char*)"  %s%s.from%s ", fop1_names[GET_OPCODE(op) - SLJIT_FOP1_BASE],
+                    (GET_OPCODE(op) == SLJIT_CONVI_FROMD) ? cast(char*)"i" : cast(char*)"w",
+                    (op & SLJIT_SINGLE_OP) ? cast(char*)"s" : cast(char*)"d");
+                sljit_verbose_param(compiler, dst, dstw);
+                fprintf(compiler.verbose, cast(char*)", ");
+                sljit_verbose_fparam(compiler, src, srcw);
+                fprintf(compiler.verbose, cast(char*)"\n");
+            }
+        }
+
+        mixin(CHECK_RETURN_OK);
+    }
+
+    CHECK_RETURN_TYPE check_sljit_emit_fop1_convd_fromw(sljit_compiler* compiler, sljit_si op,
+        sljit_si dst, sljit_sw dstw,
+        sljit_si src, sljit_sw srcw)
+    {
+        import core.stdc.stdio : fprintf;
+        
+        if (SLJIT_UNLIKELY(compiler.skip_checks)) {
+            compiler.skip_checks = 0;
+            mixin(CHECK_RETURN_OK);
+        }
+        
+        static if (SLJIT_ARGUMENT_CHECKS) {
+            mixin(CHECK_ARGUMENT("sljit_is_fpu_available()"));
+            mixin(CHECK_ARGUMENT("GET_OPCODE(op) >= SLJIT_CONVD_FROMW && GET_OPCODE(op) <= SLJIT_CONVD_FROMI"));
+            mixin(FUNCTION_CHECK_FOP);
+            mixin(FUNCTION_FCHECK("src", "srcw"));
+            mixin(FUNCTION_CHECK_DST("dst", "dstw"));
+        }
+        
+        static if (SLJIT_VERBOSE) {
+            if (SLJIT_UNLIKELY(!!compiler.verbose)) {
+                fprintf(compiler.verbose, cast(char*)"  %s%s.from%s ", fop1_names[GET_OPCODE(op) - SLJIT_FOP1_BASE],
+                    (op & SLJIT_SINGLE_OP) ? cast(char*)"s" : cast(char*)"d",
+                    (GET_OPCODE(op) == SLJIT_CONVD_FROMI) ? cast(char*)"i" : cast(char*)"w");
+                sljit_verbose_param(compiler, dst, dstw);
+                fprintf(compiler.verbose, cast(char*)", ");
+                sljit_verbose_fparam(compiler, src, srcw);
+                fprintf(compiler.verbose, cast(char*)"\n");
+            }
+        }
+        
+        mixin(CHECK_RETURN_OK);
+    }
+
+    CHECK_RETURN_TYPE check_sljit_emit_fop2(sljit_compiler* compiler, sljit_si op,
+        sljit_si dst, sljit_sw dstw,
+        sljit_si src1, sljit_sw src1w,
+        sljit_si src2, sljit_sw src2w)
+    {
+        import core.stdc.stdio : fprintf;
+        
+        static if (SLJIT_ARGUMENT_CHECKS) {
+            mixin(CHECK_ARGUMENT("sljit_is_fpu_available()"));
+            mixin(CHECK_ARGUMENT("GET_OPCODE(op) >= SLJIT_DADD && GET_OPCODE(op) <= SLJIT_DDIV"));
+            mixin(FUNCTION_CHECK_FOP);
+            mixin(FUNCTION_FCHECK("src1", "src1w"));
+            mixin(FUNCTION_FCHECK("src2", "src2w"));
+            mixin(FUNCTION_CHECK_DST("dst", "dstw"));
+        }
+        
+        static if (SLJIT_VERBOSE) {
+            if (SLJIT_UNLIKELY(!!compiler.verbose)) {
+                fprintf(compiler.verbose, cast(char*)"  %s%s ", (op & SLJIT_SINGLE_OP) ? cast(char*)"s" : cast(char*)"d", fop2_names[GET_OPCODE(op) - SLJIT_FOP2_BASE]);
+                sljit_verbose_param(compiler, dst, dstw);
+                fprintf(compiler.verbose, cast(char*)", ");
+                sljit_verbose_fparam(compiler, src1, src1w);
+                fprintf(compiler.verbose, cast(char*)", ");
+                sljit_verbose_fparam(compiler, src2, src2w);
+                fprintf(compiler.verbose, cast(char*)"\n");
+            }
+        }
+        
+        mixin(CHECK_RETURN_OK);
+    }
+
+    CHECK_RETURN_TYPE check_sljit_emit_label(sljit_compiler *compiler)
+    {
+        import core.stdc.stdio : fprintf;
+
+        static if(SLJIT_VERBOSE) {
+        
+            if (SLJIT_UNLIKELY(!!compiler.verbose))
+                fprintf(compiler.verbose, cast(char*)"label:\n");
+        }
+
+        mixin(CHECK_RETURN_OK);
+    }
+
+    CHECK_RETURN_TYPE check_sljit_emit_jump(sljit_compiler *compiler, sljit_si type)
+    {
+        import core.stdc.stdio : fprintf;
+
+        if (SLJIT_UNLIKELY(compiler.skip_checks)) {
+            compiler.skip_checks = 0;
+            mixin(CHECK_RETURN_OK);
+        }
+        
+        static if (SLJIT_ARGUMENT_CHECKS) {
+            mixin(CHECK_ARGUMENT("!(type & ~(0xff | SLJIT_REWRITABLE_JUMP | SLJIT_INT_OP))"));
+            mixin(CHECK_ARGUMENT("(type & 0xff) >= SLJIT_EQUAL && (type & 0xff) <= SLJIT_CALL3"));
+            mixin(CHECK_ARGUMENT("(type & 0xff) < SLJIT_JUMP || !(type & SLJIT_INT_OP)"));
+        }
+        static if (SLJIT_VERBOSE) {
+            if (SLJIT_UNLIKELY(!!compiler.verbose))
+                fprintf(compiler.verbose, cast(char*)"  jump%s.%s%s\n", !(type & SLJIT_REWRITABLE_JUMP) ? cast(char*)"" : cast(char*)".r",
+                    cast(char*)JUMP_PREFIX(type), jump_names[type & 0xff]);
+        }
+
+        mixin(CHECK_RETURN_OK);
+    }
+
+    CHECK_RETURN_TYPE check_sljit_emit_cmp(sljit_compiler *compiler, sljit_si type,
+        sljit_si src1, sljit_sw src1w,
+        sljit_si src2, sljit_sw src2w)
+    {
+        import core.stdc.stdio : fprintf;
+
+        static if (SLJIT_ARGUMENT_CHECKS) {
+            mixin(CHECK_ARGUMENT("!(type & ~(0xff | SLJIT_REWRITABLE_JUMP | SLJIT_INT_OP))"));
+            mixin(CHECK_ARGUMENT("(type & 0xff) >= SLJIT_EQUAL && (type & 0xff) <= SLJIT_SIG_LESS_EQUAL"));
+            mixin(FUNCTION_FCHECK("src1", "src1w"));
+            mixin(FUNCTION_FCHECK("src2", "src2w"));
+        }
+        static if (SLJIT_VERBOSE) {
+            if (SLJIT_UNLIKELY(!!compiler.verbose)) {
+                fprintf(compiler.verbose, cast(char*)"  cmp%s.%s%s ", !(type & SLJIT_REWRITABLE_JUMP) ? cast(char*)"" : cast(char*)".r",
+                    (type & SLJIT_INT_OP) ? cast(char*)"i_" : cast(char*)"", jump_names[type & 0xff]);
+                sljit_verbose_param(compiler, src1, src1w);
+                fprintf(compiler.verbose, cast(char*)", ");
+                sljit_verbose_param(compiler, src2, src2w);
+                fprintf(compiler.verbose, cast(char*)"\n");
+            }
+        }
+
+        mixin(CHECK_RETURN_OK);
+    }
+
+    CHECK_RETURN_TYPE check_sljit_emit_fcmp(sljit_compiler *compiler, sljit_si type,
+        sljit_si src1, sljit_sw src1w,
+        sljit_si src2, sljit_sw src2w)
+    {
+        import core.stdc.stdio : fprintf;
+        static if (SLJIT_ARGUMENT_CHECKS) {
+            mixin(CHECK_ARGUMENT("sljit_is_fpu_available()"));
+            mixin(CHECK_ARGUMENT("!(type & ~(0xff | SLJIT_REWRITABLE_JUMP | SLJIT_SINGLE_OP))"));
+            mixin(CHECK_ARGUMENT("(type & 0xff) >= SLJIT_D_EQUAL && (type & 0xff) <= SLJIT_D_ORDERED"));
+            mixin(FUNCTION_FCHECK("src1", "src1w"));
+            mixin(FUNCTION_FCHECK("src2", "src2w"));
+        }
+        static if(SLJIT_VERBOSE) {
+            if (SLJIT_UNLIKELY(!!compiler.verbose)) {
+                fprintf(compiler.verbose, cast(char*)"  fcmp%s.%s%s ", !(type & SLJIT_REWRITABLE_JUMP) ? cast(char*)"" : cast(char*)".r",
+                    (type & SLJIT_SINGLE_OP) ? cast(char*)"s_" : cast(char*)"d_", jump_names[type & 0xff]);
+                sljit_verbose_fparam(compiler, src1, src1w);
+                fprintf(compiler.verbose, cast(char*)", ");
+                sljit_verbose_fparam(compiler, src2, src2w);
+                fprintf(compiler.verbose, cast(char*)"\n");
+            }
+        }
+
+        mixin(CHECK_RETURN_OK);
+    }
+
+    CHECK_RETURN_TYPE check_sljit_emit_ijump(sljit_compiler *compiler, sljit_si type, sljit_si src, sljit_sw srcw)
+    {
+        import core.stdc.stdio : fprintf;
+        if (SLJIT_UNLIKELY(compiler.skip_checks)) {
+            compiler.skip_checks = 0;
+            mixin(CHECK_RETURN_OK);
+        }
+        
+        static if (SLJIT_ARGUMENT_CHECKS) {
+            mixin(CHECK_ARGUMENT("type >= SLJIT_JUMP && type <= SLJIT_CALL3"));
+            mixin(FUNCTION_FCHECK("src", "srcw"));
+        }
+        static if (SLJIT_VERBOSE) {
+            if (SLJIT_UNLIKELY(!!compiler.verbose)) {
+                fprintf(compiler.verbose, cast(char*)"  ijump.%s ", jump_names[type]);
+                sljit_verbose_param(compiler, src, srcw);
+                fprintf(compiler.verbose, cast(char*)"\n");
+            }
+        }
+
+        mixin(CHECK_RETURN_OK);
+    }
+
+    CHECK_RETURN_TYPE check_sljit_emit_op_flags(sljit_compiler *compiler, sljit_si op,
+        sljit_si dst, sljit_sw dstw,
+        sljit_si src, sljit_sw srcw,
+        sljit_si type)
+    {
+        import core.stdc.stdio : fprintf;
+
+        static if (SLJIT_ARGUMENT_CHECKS) {
+            mixin(CHECK_ARGUMENT("!(type & ~(0xff | SLJIT_INT_OP))"));
+            mixin(CHECK_ARGUMENT("(type & 0xff) >= SLJIT_EQUAL && (type & 0xff) <= SLJIT_D_ORDERED"));
+            mixin(CHECK_ARGUMENT("op == SLJIT_MOV || GET_OPCODE(op) == SLJIT_MOV_UI || GET_OPCODE(op) == SLJIT_MOV_SI
+                || (GET_OPCODE(op) >= SLJIT_AND && GET_OPCODE(op) <= SLJIT_XOR)"));
+            mixin(CHECK_ARGUMENT("(op & (SLJIT_SET_U | SLJIT_SET_S | SLJIT_SET_O | SLJIT_SET_C)) == 0"));
+            mixin(CHECK_ARGUMENT("(op & (SLJIT_SET_E | SLJIT_KEEP_FLAGS)) != (SLJIT_SET_E | SLJIT_KEEP_FLAGS)"));
+            if (GET_OPCODE(op) < SLJIT_ADD) {
+                mixin(CHECK_ARGUMENT("src == SLJIT_UNUSED && srcw == 0"));
+            } else {
+                mixin(CHECK_ARGUMENT("src == dst && srcw == dstw"));
+            }
+            mixin(FUNCTION_CHECK_DST("dst", "dstw"));
+        }
+
+        static if (SLJIT_VERBOSE) {
+            if (SLJIT_UNLIKELY(!!compiler.verbose)) {
+                fprintf(compiler.verbose, cast(char*)"  flags.%s%s%s%s ", !(op & SLJIT_INT_OP) ? cast(char*)"" : cast(char*)"i",
+                    GET_OPCODE(op) >= SLJIT_OP2_BASE ? op2_names[GET_OPCODE(op) - SLJIT_OP2_BASE] : op1_names[GET_OPCODE(op) - SLJIT_OP1_BASE],
+                    !(op & SLJIT_SET_E) ? cast(char*)"" : cast(char*)".e", !(op & SLJIT_KEEP_FLAGS) ? cast(char*)"" : cast(char*)".k");
+                sljit_verbose_param(compiler, dst, dstw);
+                if (src != SLJIT_UNUSED) {
+                    fprintf(compiler.verbose, cast(char*)", ");
+                    sljit_verbose_param(compiler, src, srcw);
+                }
+                fprintf(compiler.verbose, cast(char*)", %s%s\n", cast(char*)JUMP_PREFIX(type), jump_names[type & 0xff]);
+            }
+        }
+
+        mixin(CHECK_RETURN_OK);
+    }
+
+    CHECK_RETURN_TYPE check_sljit_get_local_base(sljit_compiler *compiler, sljit_si dst, sljit_sw dstw, sljit_sw offset)
+    {
+        import core.stdc.stdio : fprintf;
+
+        static if (SLJIT_ARGUMENT_CHECKS) {
+            mixin(FUNCTION_CHECK_DST("dst", "dstw"));
+        }
+        static if (SLJIT_VERBOSE) {
+            if (SLJIT_UNLIKELY(!!compiler.verbose)) {
+                enum FORMAT = ", #%" ~ SLJIT_PRINT_D  ~ "d\n";
+
+                fprintf(compiler.verbose, cast(char*)"  local_base ");
+                sljit_verbose_param(compiler, dst, dstw);
+                fprintf(compiler.verbose, cast(char*)FORMAT, offset);
+            }
+        }
+        mixin(CHECK_RETURN_OK);
+    }
+
+    CHECK_RETURN_TYPE check_sljit_emit_const(sljit_compiler *compiler, sljit_si dst, sljit_sw dstw, sljit_sw init_value)
+    {
+        import core.stdc.stdio : fprintf;
+
+        static if (SLJIT_ARGUMENT_CHECKS) {
+            mixin(FUNCTION_CHECK_DST("dst", "dstw"));
+        }
+
+        static if (SLJIT_VERBOSE) {
+            if (SLJIT_UNLIKELY(!!compiler.verbose)) {
+                enum FORMAT = ", #%" ~ SLJIT_PRINT_D ~ "d\n";
+
+                fprintf(compiler.verbose, cast(char*)"  const ");
+                sljit_verbose_param(compiler, dst, dstw);
+                fprintf(compiler.verbose, cast(char*)FORMAT, init_value);
+            }
+        }
 
         mixin(CHECK_RETURN_OK);
     }
 }
+
+string SELECT_FOP1_OPERATION_WITH_CHECKS(string compiler, string op, string dst, string dstw, string src, string srcw) {
+    return `
+    SLJIT_COMPILE_ASSERT(!(SLJIT_CONVW_FROMD & 0x1) && !(SLJIT_CONVD_FROMW & 0x1),
+        invalid_float_opcodes);
+    if (GET_OPCODE(` ~ op ~ `) >= SLJIT_CONVW_FROMD && GET_OPCODE(` ~ op ~ `) <= SLJIT_DCMP) {
+        if (GET_OPCODE(` ~ op ~ `) == SLJIT_DCMP) {
+            mixin(CHECK("check_sljit_emit_fop1_cmp(` ~ compiler ~ `, ` ~ op ~ `, ` ~ dst ~ `, ` ~ dstw ~ `, ` ~ src ~ `, ` ~ srcw ~ `)"));
+            ADJUST_LOCAL_OFFSET(` ~ dst ~ `, ` ~ dstw ~ `);
+            ADJUST_LOCAL_OFFSET(` ~ src ~ `, ` ~ srcw ~ `);
+            return sljit_emit_fop1_cmp(` ~ compiler ~ `, ` ~ op ~ `, ` ~ dst ~ `, ` ~ dstw ~ `, ` ~ src ~ `, ` ~ srcw ~ `);
+        }
+        if ((GET_OPCODE(` ~ op ~ `) | 0x1) == SLJIT_CONVI_FROMD) {
+            mixin(CHECK("check_sljit_emit_fop1_convw_fromd(` ~ compiler ~ `, ` ~ op ~ `, ` ~ dst ~ `, ` ~ dstw ~ `, ` ~ src ~ `, ` ~ srcw ~ `)"));
+            ADJUST_LOCAL_OFFSET(` ~ dst ~ `, ` ~ dstw ~ `);
+            ADJUST_LOCAL_OFFSET(` ~ src ~ `, ` ~ srcw ~ `);
+            return sljit_emit_fop1_convw_fromd(` ~ compiler ~ `, ` ~ op ~ `, ` ~ dst ~ `, ` ~ dstw ~ `, ` ~ src ~ `, ` ~ srcw ~ `);
+        }
+        mixin(CHECK("check_sljit_emit_fop1_convd_fromw(` ~ compiler ~ `, ` ~ op ~ `, ` ~ dst ~ `, ` ~ dstw ~ `, ` ~ src ~ `, ` ~ srcw ~ `)"));
+        ADJUST_LOCAL_OFFSET(` ~ dst ~ `, ` ~ dstw ~ `);
+        ADJUST_LOCAL_OFFSET(` ~ src ~ `, ` ~ srcw ~ `);
+        return sljit_emit_fop1_convd_fromw(` ~ compiler ~ `, ` ~ op ~ `, ` ~ dst ~ `, ` ~ dstw ~ `, ` ~ src ~ `, ` ~ srcw ~ `);
+    }
+    mixin(CHECK("check_sljit_emit_fop1(` ~ compiler ~ `, ` ~ op ~ `, ` ~ dst ~ `, ` ~ dstw ~ `, ` ~ src ~ `, ` ~ srcw ~ `)"));
+    ADJUST_LOCAL_OFFSET(` ~ dst ~ `, ` ~ dstw ~ `);
+    ADJUST_LOCAL_OFFSET(` ~ src ~ `, ` ~ srcw ~ `);
+`;
+}
+
+sljit_si emit_mov_before_return(sljit_compiler *compiler, sljit_si op, sljit_si src, sljit_sw srcw)
+{
+    /* Return if don't need to do anything. */
+    if (op == SLJIT_UNUSED)
+        return SLJIT_SUCCESS;
+    
+    static if (SLJIT_64BIT_ARCHITECTURE) {
+        /* At the moment the pointer size is always equal to sljit_sw. May be changed in the future. */
+        if (src == SLJIT_RETURN_REG && (op == SLJIT_MOV || op == SLJIT_MOV_P))
+            return SLJIT_SUCCESS;
+    } else {
+        if (src == SLJIT_RETURN_REG && (op == SLJIT_MOV || op == SLJIT_MOV_UI || op == SLJIT_MOV_SI || op == SLJIT_MOV_P))
+            return SLJIT_SUCCESS;
+    }
+    
+    static if (SLJIT_ARGUMENT_CHECKS || SLJIT_VERBOSE) {
+        compiler.skip_checks = 1;
+    }
+    return sljit_emit_op1(compiler, op, SLJIT_RETURN_REG, 0, src, srcw);
+}
+
+/* CPU description section */
+
