@@ -1588,8 +1588,10 @@ static if (SLJIT_ARGUMENT_CHECKS || SLJIT_VERBOSE) {
     
     enum SLJIT_CPUINFO = SLJIT_CPUINFO_PART1 ~ SLJIT_CPUINFO_PART2 ~ SLJIT_CPUINFO_PART3;
     
-    static if (SLJIT_CONFIG_X86) {
-        import sljitNativeX86;
+    static if (SLJIT_CONFIG_X86_32) {
+        import sljitNativeX86_32;
+    } else static if (SLJIT_CONFIG_X86_64) {
+        import sljitNativeX86_64;
     } else static if (SLJIT_CONFIG_ARM_V5) {
         import sljitNativeARM_32;
     } else static if (SLJIT_CONFIG_ARM_V7) {
