@@ -25,6 +25,7 @@
  */
 module sljitNativeX86_common;
 import sljitConfigInternal;
+import sljitLir_h;
 import sljitLir_c;
 
 extern(C):
@@ -156,3 +157,203 @@ enum EX86_SSE2 = (EX86_SSE2_OP1 | EX86_SSE2_OP2);
 /*  Instrucion forms                                                     */
 /* --------------------------------------------------------------------- */
 
+enum {
+    ADD = 0 << 3,
+    ADD_EAX_i32 = 0x05,
+    ADD_r_rm = 0x03,
+    ADD_rm_r = 0x01,
+    ADDSD_x_xm = 0x58,
+    ADC = 2 << 3,
+    ADC_EAX_i32 = 0x15,
+    ADC_r_rm = 0x13,
+    ADC_rm_r = 0x11,
+    AND = 4 << 3,
+    AND_EAX_i32 = 0x25,
+    AND_r_rm = 0x23,
+    AND_rm_r = 0x21,
+    ANDPD_x_xm = 0x54,
+    BSR_x_xm = 0xbd,
+    CALL_i32 = 0xe8,
+    CALL_rm = 2 << 3,
+    CDQ = 0x99,
+    CMOVNE_r_rm = 0x45,
+    CMP = 7 << 3,
+    CMP_EAX_i32 = 0x3d,
+    CMP_r_rm = 0x3b,
+    CMP_rm_r = 0x39,
+    CVTPD2PS_x_xm = 0x5a,
+    CVTSI2SD_x_rm = 0x2a,
+    CVTTSD2SI_r_xm = 0x2c,
+    DIV = 6 << 3,
+    DIVSD_x_xm = 0x5e,
+    INT3 = 0xcc,
+    IDIV = 7 << 3,
+    IMUL = 5 << 3,
+    IMUL_r_rm = 0xaf,
+    IMUL_r_rm_i8 = 0x6b,
+    JE_i8 = 0x74,
+    JNE_i8 = 0x75,
+    JMP_i8 = 0xeb,
+    JMP_i32 = 0xe9,
+    JMP_rm = 4 << 3,
+    LEA_r_m = 0x8d,
+    MOV_r_rm = 0x8b,
+    MOV_r_i32 = 0xb8,
+    MOV_rm8_i8 = 0xc6,
+    MOV_rm8_r8 = 0x88,
+    MOVSD_x_xm = 0x10,
+    MOVSD_xm_x = 0x11,
+    MOVSXD_r_rm = 0x63,
+    MOVSX_r_rm8 = 0xbe,
+    MOVSX_r_rm16 = 0xbf,
+    MOVZX_r_rm8 = 0xb6,
+    MOVZX_r_rm16 = 4 << 3,
+    MUL = 4 << 3,
+    MULSD_x_xm = 0x59,
+    NEG_rm = 3 << 3,
+    NOP = 0x90,
+    NOT_rm  = 2 << 3,
+    OR = 1 << 3,
+    OR_r_rm = 0x0b,
+    OR_EAX_i32 = 0x0d,
+    OR_rm_r = 0x09,
+    OR_rm8_r8 = 0x08,
+    POP_r = 0x59,
+    POP_rm = 0x8f,
+    POPF = 0x9d,
+    PUSH_i32 = 0x68,
+    PUSH_r = 0x50,
+    PUSH_rm = 6 << 3,
+    PUSHF = 0x9c,
+    RET_near = 0xc3,
+    RET_i16 = 0xc2,
+    SBB = 3 << 3,
+    SBB_EAX_i32 = 0x1d,
+    SBB_r_rm = 0x1b,
+    SBB_rm_r = 0x19,
+    SAR = 7 << 3,
+    SHL = 4 << 3,
+    SHR = 5 << 3,
+    SUB = 5 << 3,
+    SUB_EAX_i32 = 0x2d,
+    SUB_r_rm = 0x2b,
+    SUB_rm_r = 0x29,
+    SUBSD_x_xm = 0x5c,
+    TEST_EAX_i32 = 0xa9,
+    TEST_rm_r = 0x85,
+    UCOMISD_x_xm = 0x2e,
+    UNPCKLPD_x_xm = 0x14,
+    XCHG_EAX_r = 0x90,
+    XCHG_r_rm = 0x87,
+    XOR = 6 << 3,
+    XOR_EAX_i32 = 0x35,
+    XOR_r_rm = 0x33,
+    XOR_rm_r = 0x31,
+    XORPD_x_xm = 0x57,
+
+    GROUP_0F = 0x0f,
+    GROUP_F7 = 0xf7,
+    GROUP_FF = 0xff,
+    GROUP_BINARY_81 = 0x81,
+    GROUP_BINARY_83 = 0x83,
+    GROUP_SHIFT_1 = 0xd1,
+    GROUP_SHIFT_N = 0xc1,
+    GROUP_SHIFT_CL = 0xd3,
+
+    MOD_REG = 0xc0,
+    MOD_DISP8 = 0x40,
+}
+
+string INC_SIZE(string s) pure {
+    return `*inst++ = ` ~ s ~ `; compuiler.size += ` ~ s ~ `;`; }
+string PUSH_REG(string r) pure {
+    return `*inst++ = (PUSH_r + ` ~ r ~ `);`; }
+string POP_REG(string r) pure {
+    return `*inst++ = (POP_r + ` ~ r ~ `);`; }
+enum RET = `*inst++ = RET_near;`;
+string RET_I16(string n) pure {
+    return `*inst++ = RET_i16; *inst++ = ` ~ n ~ `; *inst++ = 0;`; }
+/* r32, r/m32 */
+string MOV_RM(string mod, string reg, string rm) pure {
+    return `
+*inst++ = MOD_r_rm;
+*inst++ = ` ~ mod ~ ` << 6 | ` ~ reg ~ ` << 3 | rm;`;
+}
+
+/* Multithreading does not affect these static variables, since they store
+   built-in CPU features. Therefore they can be overwritten by different threads
+   if they detect the CPU features in the same time. */
+
+static if (SLJIT_DETECT_SSE2) {
+    static __gshared sljit_si cpu_has_sse2 = -1;
+}
+
+static __gshared sljit_si cpu_has_cmov = -1;
+
+void get_cpu_features() {
+    import core.cpuid : sse2, hasCmov;
+    static if (SLJIT_DETECT_SSE2) {
+        cpu_has_sse2 = cast(sljit_si)sse2();
+    }
+
+    cpu_has_cmov = cast(sljit_si)hasCmov();
+}
+
+sljit_ub get_jump_code(sljit_si type)
+{
+    switch (type) {
+        case SLJIT_EQUAL:
+        case SLJIT_D_EQUAL:
+            return 0x84 /* je */;
+            
+        case SLJIT_NOT_EQUAL:
+        case SLJIT_D_NOT_EQUAL:
+            return 0x85 /* jne */;
+            
+        case SLJIT_LESS:
+        case SLJIT_D_LESS:
+            return 0x82 /* jc */;
+            
+        case SLJIT_GREATER_EQUAL:
+        case SLJIT_D_GREATER_EQUAL:
+            return 0x83 /* jae */;
+            
+        case SLJIT_GREATER:
+        case SLJIT_D_GREATER:
+            return 0x87 /* jnbe */;
+            
+        case SLJIT_LESS_EQUAL:
+        case SLJIT_D_LESS_EQUAL:
+            return 0x86 /* jbe */;
+            
+        case SLJIT_SIG_LESS:
+            return 0x8c /* jl */;
+            
+        case SLJIT_SIG_GREATER_EQUAL:
+            return 0x8d /* jnl */;
+            
+        case SLJIT_SIG_GREATER:
+            return 0x8f /* jnle */;
+            
+        case SLJIT_SIG_LESS_EQUAL:
+            return 0x8e /* jle */;
+            
+        case SLJIT_OVERFLOW:
+        case SLJIT_MUL_OVERFLOW:
+            return 0x80 /* jo */;
+            
+        case SLJIT_NOT_OVERFLOW:
+        case SLJIT_MUL_NOT_OVERFLOW:
+            return 0x81 /* jno */;
+            
+        case SLJIT_D_UNORDERED:
+            return 0x8a /* jp */;
+            
+        case SLJIT_D_ORDERED:
+            return 0x8b /* jpo */;
+        default:
+            return 0;
+    }
+}
+
+///
