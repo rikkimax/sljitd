@@ -1566,7 +1566,7 @@ static if (SLJIT_ARGUMENT_CHECKS || SLJIT_VERBOSE) {
     
     static if (SLJIT_32BIT_ARCHITECTURE) {
         enum SLJIT_CPUINFO_PART1 = " 32bit (";
-    } else static if (SLJIT_64bit_ARCHITECTURE) {
+    } else static if (SLJIT_64BIT_ARCHITECTURE) {
         enum SLJIT_CPUINFO_PART1 = " 64bit (";
     } else {
         static assert(0, "Internal error: CPU type info missing");
