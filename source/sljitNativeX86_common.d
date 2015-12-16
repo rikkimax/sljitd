@@ -265,7 +265,7 @@ enum {
 }
 
 string INC_SIZE(string s) pure {
-    return `*inst++ = ` ~ s ~ `; compuiler.size += ` ~ s ~ `;`; }
+    return `*inst++ = ` ~ s ~ `; compiler.size += ` ~ s ~ `;`; }
 string PUSH_REG(string r) pure {
     return `*inst++ = (PUSH_r + ` ~ r ~ `);`; }
 string POP_REG(string r) pure {
@@ -355,5 +355,251 @@ sljit_ub get_jump_code(sljit_si type)
             return 0;
     }
 }
+
+sljit_ub* generate_far_jump_code(sljit_jump *jump, sljit_ub *code_ptr, sljit_si type);
+
+static if (SLJIT_CONFIG_X86_64) {
+    sljit_ub* generate_fixed_jump(sljit_ub *code_ptr, sljit_sw addr, sljit_si type);
+}
+
+sljit_ub* generate_near_jump_code(sljit_jump *jump, sljit_ub *code_ptr, sljit_ub *code, sljit_si type)
+{
+    sljit_si short_jump;
+    sljit_uw label_addr;
+
+    if (jump.flags & JUMP_LABEL)
+        label_addr = cast(sljit_uw)(code + jump.u.label.size);
+    else
+        label_addr = jump.u.target;
+    short_jump = cast(sljit_sw)(label_addr - (jump.addr + 2)) >= -128 && cast(sljit_sw)(label_addr - (jump.addr + 2)) <= 127;
+
+    static if (SLJIT_CONFIG_X86_64) {
+        if (cast(sljit_sw)(label_addr - (jump.addr + 1)) > HALFWORD_MAX || cast(sljit_sw)(label_addr - (jump.addr + 1)) < HALFWORD_MIN)
+            return generate_far_jump_code(jump, code_ptr, type);
+    }
+
+    if (type == SLJIT_JUMP) {
+        if (short_jump)
+            *code_ptr++ = JMP_i8;
+        else
+            *code_ptr++ = JMP_i32;
+        jump.addr++;
+    }
+    else if (type >= SLJIT_FAST_CALL) {
+        short_jump = 0;
+        *code_ptr++ = CALL_i32;
+        jump.addr++;
+    }
+    else if (short_jump) {
+        *code_ptr++ = cast(ubyte)(get_jump_code(type) - 0x10);
+        jump.addr++;
+    }
+    else {
+        *code_ptr++ = GROUP_0F;
+        *code_ptr++ = get_jump_code(type);
+        jump.addr += 2;
+    }
+
+    if (short_jump) {
+        jump.flags |= PATCH_MB;
+        code_ptr += sljit_sb.sizeof;
+    } else {
+        jump.flags |= PATCH_MW;
+        static if (SLJIT_CONFIG_X86_32) {
+            code_ptr += sljit_sw.sizeof;
+        } else {
+            code_ptr += sljit_si.sizeof;
+        }
+    }
+
+    return code_ptr;
+}
+
+void* sljit_generate_code(sljit_compiler *compiler)
+{
+    sljit_memory_fragment *buf;
+    sljit_ub *code;
+    sljit_ub *code_ptr;
+    sljit_ub *buf_ptr;
+    sljit_ub *buf_end;
+    sljit_ub len;
+    
+    sljit_label *label;
+    sljit_jump *jump;
+    sljit_const *const_;
+    
+    mixin(CHECK_ERROR_PTR);
+    mixin(CHECK_PTR("check_sljit_generate_code(compiler)"));
+    reverse_buf(compiler);
+    
+    /* Second code generation pass. */
+    code = cast(sljit_ub*)SLJIT_MALLOC_EXEC(compiler.size);
+    mixin(PTR_FAIL_WITH_EXEC_IF("code"));
+    buf = compiler.buf;
+    
+    code_ptr = code;
+    label = compiler.labels;
+    jump = compiler.jumps;
+    const_ = compiler.consts;
+    do {
+        buf_ptr = buf.memory;
+        buf_end = buf_ptr + buf.used_size;
+        do {
+            len = *buf_ptr++;
+            if (len > 0) {
+                /* The code is already generated. */
+                SLJIT_MEMMOVE(code_ptr, buf_ptr, len);
+                code_ptr += len;
+                buf_ptr += len;
+            }
+            else {
+                if (*buf_ptr >= 4) {
+                    jump.addr = cast(sljit_uw)code_ptr;
+                    if (!(jump.flags & SLJIT_REWRITABLE_JUMP))
+                        code_ptr = generate_near_jump_code(jump, code_ptr, code, *buf_ptr - 4);
+                    else
+                        code_ptr = generate_far_jump_code(jump, code_ptr, *buf_ptr - 4);
+                    jump = jump.next;
+                }
+                else if (*buf_ptr == 0) {
+                    label.addr = cast(sljit_uw)code_ptr;
+                    label.size = code_ptr - code;
+                    label = label.next;
+                }
+                else if (*buf_ptr == 1) {
+                    const_.addr = (cast(sljit_uw)code_ptr) - sljit_sw.sizeof;
+                    const_ = const_.next;
+                }
+                else {
+                    static if (SLJIT_CONFIG_X86_32) {
+                        *code_ptr++ = (*buf_ptr == 2) ? CALL_i32 : JMP_i32;
+                        buf_ptr++;
+                        *cast(sljit_sw*)code_ptr = *cast(sljit_sw*)buf_ptr - (cast(sljit_sw)code_ptr + sljit_sw.sizeof);
+                        code_ptr += sljit_sw.sizeof;
+                        buf_ptr += sljit_sw.sizeof - 1;
+                    } else {
+                        code_ptr = generate_fixed_jump(code_ptr, *cast(sljit_sw*)(buf_ptr + 1), *buf_ptr);
+                        buf_ptr += sljit_sw.sizeof;
+                    }
+                }
+                buf_ptr++;
+            }
+        } while (buf_ptr < buf_end);
+        SLJIT_ASSERT(buf_ptr == buf_end);
+        buf = buf.next;
+    } while (buf);
+    
+    SLJIT_ASSERT(!label);
+    SLJIT_ASSERT(!jump);
+    SLJIT_ASSERT(!const_);
+    
+    jump = compiler.jumps;
+    while (jump) {
+        if (jump.flags & PATCH_MB) {
+            SLJIT_ASSERT(cast(sljit_sw)(jump.u.label.addr - (jump.addr + sljit_sb.sizeof)) >= -128 && cast(sljit_sw)(jump.u.label.addr - (jump.addr + sljit_sb.sizeof)) <= 127);
+            *cast(sljit_ub*)jump.addr = cast(sljit_ub)(jump.u.label.addr - (jump.addr + sljit_sb.sizeof));
+        } else if (jump.flags & PATCH_MW) {
+            if (jump.flags & JUMP_LABEL) {
+                static if (SLJIT_CONFIG_X86_32) {
+                    *cast(sljit_sw*)jump.addr = cast(sljit_sw)(jump.u.label.addr - (jump.addr + sljit_sw.sizeof));
+                } else {
+                    SLJIT_ASSERT(cast(sljit_sw)(jump.u.label.addr - (jump.addr + sljit_si.sizeof)) >= HALFWORD_MIN && cast(sljit_sw)(jump.u.label.addr - (jump.addr + sljit_si.sizeof)) <= HALFWORD_MAX);
+                    *cast(sljit_si*)jump.addr = cast(sljit_si)(jump.u.label.addr - (jump.addr + sljit_si.sizeof));
+                }
+            }
+            else {
+                static if (SLJIT_CONFIG_X86_32) {
+                    *cast(sljit_sw*)jump.addr = cast(sljit_sw)(jump.u.target - (jump.addr + sljit_sw.sizeof));
+                } else {
+                    SLJIT_ASSERT(cast(sljit_sw)(jump.u.target - (jump.addr + sljit_si.sizeof)) >= HALFWORD_MIN && cast(sljit_sw)(jump.u.target - (jump.addr + sljit_si.sizeof)) <= HALFWORD_MAX);
+                    *cast(sljit_si*)jump.addr = cast(sljit_si)(jump.u.target - (jump.addr + sljit_si.sizeof));
+                }
+            }
+        } else static if (SLJIT_CONFIG_X86_64) {
+            if (jump.flags & PATCH_MD)
+                *cast(sljit_sw*)jump.addr = jump.u.label.addr;
+        }
+        
+        jump = jump.next;
+    }
+    
+    /* Maybe we waste some space because of short jumps. */
+    SLJIT_ASSERT(code_ptr <= code + compiler.size);
+    compiler.error = SLJIT_ERR_COMPILED;
+    compiler.executable_size = code_ptr - code;
+    return cast(void*)code;
+}
+
+/* --------------------------------------------------------------------- */
+/*  Operators                                                            */
+/* --------------------------------------------------------------------- */
+
+sljit_si emit_cum_binary(sljit_compiler *compiler,
+    sljit_ub op_rm, sljit_ub op_mr, sljit_ub op_imm, sljit_ub op_eax_imm,
+    sljit_si dst, sljit_sw dstw,
+    sljit_si src1, sljit_sw src1w,
+    sljit_si src2, sljit_sw src2w);
+
+sljit_si emit_non_cum_binary(sljit_compiler *compiler,
+    sljit_ub op_rm, sljit_ub op_mr, sljit_ub op_imm, sljit_ub op_eax_imm,
+    sljit_si dst, sljit_sw dstw,
+    sljit_si src1, sljit_sw src1w,
+    sljit_si src2, sljit_sw src2w);
+
+sljit_si emit_mov(sljit_compiler *compiler,
+    sljit_si dst, sljit_sw dstw,
+    sljit_si src, sljit_sw srcw);
+
+sljit_si emit_save_flags(sljit_compiler *compiler)
+{
+    sljit_ub *inst;
+
+    static if (SLJIT_CONFIG_X86_32) {
+        inst = cast(sljit_ub*)ensure_buf(compiler, 1 + 5);
+        mixin(FAIL_IF("!inst"));
+        mixin(INC_SIZE("5"));
+    } else {
+        inst = cast(sljit_ub*)ensure_buf(compiler, 1 + 6);
+        mixin(FAIL_IF("!inst"));
+        mixin(INC_SIZE("6"));
+        *inst++ = REX_W;
+    }
+    *inst++ = LEA_r_m; /* lea esp/rsp, [esp/rsp + sizeof(sljit_sw)] */
+    *inst++ = 0x64;
+    *inst++ = 0x24;
+    *inst++ = cast(sljit_ub)sljit_sw.sizeof;
+    *inst++ = PUSHF;
+    compiler.flags_saved = 1;
+    return SLJIT_SUCCESS;
+}
+
+sljit_si emit_restore_flags(sljit_compiler *compiler, sljit_si keep_flags)
+{
+    sljit_ub *inst;
+    
+    static if (SLJIT_CONFIG_X86_32) {
+        inst = cast(sljit_ub*)ensure_buf(compiler, 1 + 5);
+        mixin(FAIL_IF("!inst"));
+        mixin(INC_SIZE("5"));
+        *inst++ = POPF;
+    } else {
+        inst = cast(sljit_ub*)ensure_buf(compiler, 1 + 6);
+        mixin(FAIL_IF("!inst"));
+        mixin(INC_SIZE("6"));
+        *inst++ = POPF;
+        *inst++ = REX_W;
+    }
+    *inst++ = LEA_r_m; /* lea esp/rsp, [esp/rsp - sizeof(sljit_sw)] */
+    *inst++ = 0x64;
+    *inst++ = 0x24;
+    *inst++ = cast(sljit_ub)-cast(sljit_sb)sljit_sw.sizeof;
+    compiler.flags_saved = keep_flags;
+    return SLJIT_SUCCESS;
+}
+
+version(Windows) {
+    ///
+}
+
 
 ///
