@@ -605,9 +605,9 @@ version(Windows) {
         CPU cycles if the stack is large enough. However, you don't know it in
         advance, so it must always be called. I think this is a bad design in
         general even if it has some reasons. */
-	sljit_grow_stack(sljit_sw local_size) {
-		extern (C) void* alloca(size_t size);
-        	*(volatile sljit_si*)alloca(local_size) = 0;
-	}
+    void sljit_grow_stack(sljit_sw local_size) {
+        extern (C) void* alloca(size_t size);
+        *cast(sljit_si*)alloca(local_size) = 0;
+    }
 }
 
