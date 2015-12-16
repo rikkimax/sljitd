@@ -598,8 +598,16 @@ sljit_si emit_restore_flags(sljit_compiler *compiler, sljit_si keep_flags)
 }
 
 version(Windows) {
-    ///
+         /** Workaround for calling the internal _chkstk() function on Windows.
+        This function touches all 4k pages belongs to the requested stack space,
+        which size is passed in local_size. This is necessary on Windows where
+        the stack can only grow in 4k steps. However, this function just burn
+        CPU cycles if the stack is large enough. However, you don't know it in
+        advance, so it must always be called. I think this is a bad design in
+        general even if it has some reasons. */
+	sljit_grow_stack(sljit_sw local_size) {
+		extern (C) void* alloca(size_t size);
+        	*(volatile sljit_si*)alloca(local_size) = 0;
+	}
 }
 
-
-///
