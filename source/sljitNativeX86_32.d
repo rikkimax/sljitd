@@ -25,4 +25,14 @@
  */
 module sljitNativeX86_32;
 import sljitConfigInternal;
+import sljitLir_h;
+
 extern(C):
+
+sljit_si emit_do_imm(sljit_compiler *compiler, sljit_ub opcode, sljit_sw imm);
+
+sljit_ub* emit_x86_instruction(sljit_compiler *compiler, sljit_si size,
+	/* The register or immediate operand. */
+	sljit_si a, sljit_sw imma,
+	/* The general operand (not immediate). */
+	sljit_si b, sljit_sw immb);

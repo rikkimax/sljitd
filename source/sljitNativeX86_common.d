@@ -199,6 +199,8 @@ enum {
     LEA_r_m = 0x8d,
     MOV_r_rm = 0x8b,
     MOV_r_i32 = 0xb8,
+    MOV_rm_r = 0x89,
+    MOV_rm_i32 = 0xc7,
     MOV_rm8_i8 = 0xc6,
     MOV_rm8_r8 = 0x88,
     MOVSD_x_xm = 0x10,
@@ -610,4 +612,239 @@ version(Windows) {
         *cast(sljit_si*)alloca(local_size) = 0;
     }
 }
+
+static if (SLJIT_CONFIG_X86_32) {
+    public import sljitNativeX86_32;
+} else {
+    public import sljitNativeX86_64;
+}
+
+sljit_si emit_mov(sljit_compiler *compiler, sljit_si dst, sljit_sw dstw, sljit_si src, sljit_sw srcw)
+{
+    sljit_ub* inst;
+
+    if (dst == SLJIT_UNUSED) {
+        /* No destination, doesn't need to setup flags. */
+        if (src & SLJIT_MEM) {
+            inst = emit_x86_instruction(compiler, 1, TMP_REG1, 0, src, srcw);
+            mixin(FAIL_IF("!inst"));
+            *inst = MOV_r_rm;
+        }
+        return SLJIT_SUCCESS;
+    }
+    if (FAST_IS_REG(src)) {
+        inst = emit_x86_instruction(compiler, 1, src, 0, dst, dstw);
+        mixin(FAIL_IF("!inst"));
+        *inst = MOV_rm_r;
+        return SLJIT_SUCCESS;
+    }
+    if (src & SLJIT_IMM) {
+        if (FAST_IS_REG(dst)) {
+            static if (SLJIT_CONFIG_X86_32) {
+                return emit_do_imm(compiler, cast(ubyte)(MOV_r_i32 + reg_map[dst]), srcw);
+            } else {
+                if (!compiler.mode32) {
+                    if (NOT_HALFWORD(srcw))
+                        return emit_load_imm64(compiler, dst, srcw);
+                }
+                else
+                    return emit_do_imm32(compiler, (reg_map[dst] >= 8) ? REX_B : 0, MOV_r_i32 + reg_lmap[dst], srcw);
+            }
+        }
+        static if (SLJIT_CONFIG_X86_64) {
+            if (!compiler.mode32 && NOT_HALFWORD(srcw)) {
+                mixin(FAIL_IF("emit_load_imm64(compiler, TMP_REG2, srcw)"));
+                inst = emit_x86_instruction(compiler, 1, TMP_REG2, 0, dst, dstw);
+                mixin(FAIL_IF("!inst"));
+                *inst = MOV_rm_r;
+                return SLJIT_SUCCESS;
+            }
+        }
+        inst = emit_x86_instruction(compiler, 1, SLJIT_IMM, srcw, dst, dstw);
+        mixin(FAIL_IF("!inst"));
+        *inst = MOV_rm_i32;
+        return SLJIT_SUCCESS;
+    }
+    if (FAST_IS_REG(dst)) {
+        inst = emit_x86_instruction(compiler, 1, dst, 0, src, srcw);
+        mixin(FAIL_IF("!inst"));
+        *inst = MOV_r_rm;
+        return SLJIT_SUCCESS;
+    }
+
+    /* Memory to memory move. Requires two instruction. */
+    inst = emit_x86_instruction(compiler, 1, TMP_REG1, 0, src, srcw);
+    mixin(FAIL_IF("!inst"));
+    *inst = MOV_r_rm;
+    inst = emit_x86_instruction(compiler, 1, TMP_REG1, 0, dst, dstw);
+    mixin(FAIL_IF("!inst"));
+    *inst = MOV_rm_r;
+    return SLJIT_SUCCESS;
+}
+
+string EMIT_MOV(string compiler, string dst, string dstw, string src, string srcw) {
+    return FAIL_IF("emit_mov(" ~ compiler ~ ", " ~ dst ~ ", " ~ dstw ~ ", " ~
+                    src ~ ", " ~ srcw ~ ")"); }
+
+sljit_si sljit_emit_op0(sljit_compiler *compiler, sljit_si op)
+{
+    sljit_ub *inst;
+    static if (SLJIT_CONFIG_X86_64) {
+        sljit_si size;
+    }
+
+    mixin(CHECK_ERROR);
+    mixin(CHECK("check_sljit_emit_op0(compiler, op)"));
+
+    switch (GET_OPCODE(op)) {
+    case SLJIT_BREAKPOINT:
+        inst = cast(sljit_ub*)ensure_buf(compiler, 1 + 1);
+        mixin(FAIL_IF("!inst"));
+        mixin(INC_SIZE("1"));
+        *inst = INT3;
+        break;
+    case SLJIT_NOP:
+        inst = cast(sljit_ub*)ensure_buf(compiler, 1 + 1);
+        mixin(FAIL_IF("!inst"));
+        mixin(INC_SIZE("1"));
+        *inst = NOP;
+        break;
+    case SLJIT_LUMUL:
+    case SLJIT_LSMUL:
+    case SLJIT_LUDIV:
+    case SLJIT_LSDIV:
+        compiler.flags_saved = 0;
+        static if (SLJIT_CONFIG_X86_64) {
+            version(Win64) {
+                SLJIT_COMPILE_ASSERT(
+                    reg_map[SLJIT_R0] == 0
+                    && reg_map[SLJIT_R1] == 2
+                    && reg_map[TMP_REG1] > 7,
+                    invalid_register_assignment_for_div_mul);
+            } else {
+                SLJIT_COMPILE_ASSERT(
+                    reg_map[SLJIT_R0] == 0
+                    && reg_map[SLJIT_R1] < 7
+                    && reg_map[TMP_REG1] == 2,
+                    invalid_register_assignment_for_div_mul);
+            }
+            compiler.mode32 = op & SLJIT_INT_OP;
+        }
+
+        op = GET_OPCODE(op);
+        if (op == SLJIT_LUDIV) {
+            static if (SLJIT_CONFIG_X86_32) {
+                enum BOPLUDIV = true;
+            } else version(Win64) {
+                enum BOPLUDIV = true;
+            } else {
+                enum BOPLUDIV = false;
+            }
+        
+            static if (BOPLUDIV) {
+                mixin(EMIT_MOV("compiler", "TMP_REG1", "0", "SLJIT_R1", "0"));
+                inst = emit_x86_instruction(compiler, 1, SLJIT_R1, 0, SLJIT_R1, 0);
+            } else {
+                inst = emit_x86_instruction(compiler, 1, TMP_REG1, 0, TMP_REG1, 0);
+            }
+            mixin(FAIL_IF("!inst"));
+            *inst = XOR_r_rm;
+        }
+
+        if (op == SLJIT_LSDIV) {
+            static if (SLJIT_CONFIG_X86_32) {
+                enum BOPLSDIV = true;
+            } else version(Win64) {
+                enum BOPLSDIV = true;
+            } else {
+                enum BOPLSDIV = false;
+            }
+        
+            static if (BOPLSDIV) {
+                mixin(EMIT_MOV("compiler", "TMP_REG1", "0", "SLJIT_R1", "0"));
+            }
+
+            static if (SLJIT_CONFIG_X86_32) {
+                inst = cast(sljit_ub*)ensure_buf(compiler, 1 + 1);
+                mixin(FAIL_IF("!inst"));
+                mixin(INC_SIZE("1"));
+                *inst = CDQ;
+            } else {
+                if (compiler.mode32) {
+                    inst = cast(sljit_ub*)ensure_buf(compiler, 1 + 1);
+                    mixin(FAIL_IF("!inst"));
+                    mixin(INC_SIZE("1"));
+                    *inst = CDQ;
+                } else {
+                    inst = cast(sljit_ub*)ensure_buf(compiler, 1 + 2);
+                    mixin(FAIL_IF("!inst"));
+                    mixin(INC_SIZE("2"));
+                    *inst++ = REX_W;
+                    *inst = CDQ;
+                }
+            }
+        }
+
+        static if (SLJIT_CONFIG_X86_32) {
+            inst = cast(sljit_ub*)ensure_buf(compiler, 1 + 2);
+            mixin(FAIL_IF("!inst"));
+            mixin(INC_SIZE("2"));
+            *inst++ = GROUP_F7;
+            *inst = MOD_REG | ((op >= SLJIT_LUDIV) ? reg_map[TMP_REG1] : reg_map[SLJIT_R1]);
+        } else {
+            version(Win64) {
+                size = (!compiler.mode32 || op >= SLJIT_LUDIV) ? 3 : 2;
+            } else {
+                size = (!compiler.mode32) ? 3 : 2;
+            }
+            inst = cast(sljit_ub*)ensure_buf(compiler, 1 + size);
+            mixin(FAIL_IF("!inst"));
+            mixin(INC_SIZE("size"));
+            version(Win64) {
+                if (!compiler.mode32)
+                    *inst++ = REX_W | ((op >= SLJIT_LUDIV) ? REX_B : 0);
+                else if (op >= SLJIT_LUDIV)
+                    *inst++ = REX_B;
+                *inst++ = GROUP_F7;
+                *inst = MOD_REG | ((op >= SLJIT_LUDIV) ? reg_lmap[TMP_REG1] : reg_lmap[SLJIT_R1]);
+            } else {
+                if (!compiler.mode32)
+                    *inst++ = REX_W;
+                *inst++ = GROUP_F7;
+                *inst = MOD_REG | reg_map[SLJIT_R1];
+            }
+        }
+        switch (op) {
+        case SLJIT_LUMUL:
+            *inst |= MUL;
+            break;
+        case SLJIT_LSMUL:
+            *inst |= IMUL;
+            break;
+        case SLJIT_LUDIV:
+            *inst |= DIV;
+            break;
+        case SLJIT_LSDIV:
+            *inst |= IDIV;
+            break;
+            default:
+                break;
+        }
+        
+        static if (SLJIT_CONFIG_X86_64) {
+            version(Win64) {
+            } else {
+                mixin(EMIT_MOV("compiler", "SLJIT_R1", "0", "TMP_REG1", "0"));
+            }
+        } else {
+        }
+        break;
+        
+        default:
+            break;
+    }
+
+    return SLJIT_SUCCESS;
+}
+
 
